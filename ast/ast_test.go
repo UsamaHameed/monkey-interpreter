@@ -24,8 +24,6 @@ func TestPrintAst(t *testing.T) {
         },
     }
 
-    fmt.Println(program.String())
-
     if program.String() != "let myVar = anotherVar;" {
         t.Errorf("program.String() printed wrong ast, got=%q", program.String())
     }
