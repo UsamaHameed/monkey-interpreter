@@ -1,7 +1,6 @@
 package ast
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/UsamaHameed/monkey-interpreter/token"
