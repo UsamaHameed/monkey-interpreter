@@ -192,46 +192,49 @@ func TestIntegerLiteralExpression(t *testing.T) {
 }
 
 func TestParsingPrefixExpressions(t *testing.T) {
-    prefixTests := []struct {
-        input        string
-        operator     string
-        integerValue int64
-    }{
-        {"!5;", "!", 5},
-        {"-15;", "-", 15},
-    }
+	prefixTests := []struct {
+		input    string
+		operator string
+		value    interface{}
+	}{
+		{"!5;", "!", 5},
+		{"-15;", "-", 15},
+		{"!foobar;", "!", "foobar"},
+		{"-foobar;", "-", "foobar"},
+		{"!true;", "!", true},
+		{"!false;", "!", false},
+	}
 
-    for _, expected := range prefixTests {
-        l := lexer.New(expected.input)
-        p := New(l)
-        program := p.ParseProgram()
-        checkParseErrors(t, p)
+	for _, tt := range prefixTests {
+		l := lexer.New(tt.input)
+		p := New(l)
+		program := p.ParseProgram()
+		checkParseErrors(t, p)
 
-        if len(program.Statements) != 1 {
-            t.Fatalf("program.Statements does not contain %d statements. got=%d\n",
-                1, len(program.Statements))
-        }
+		if len(program.Statements) != 1 {
+			t.Fatalf("program.Statements does not contain %d statements. got=%d\n",
+				1, len(program.Statements))
+		}
 
-        s, ok := program.Statements[0].(*ast.ExpressionStatement)
-        if !ok {
-            t.Fatalf("the root node aka program.Statements[0] is not an ast.ExpressionStatement. got=%T",
-                program.Statements[0])
-        }
+		stmt, ok := program.Statements[0].(*ast.ExpressionStatement)
+		if !ok {
+			t.Fatalf("program.Statements[0] is not ast.ExpressionStatement. got=%T",
+				program.Statements[0])
+		}
 
-        exp, ok := s.Expression.(*ast.PrefixExpression)
-        if !ok {
-            t.Fatalf("stmt is not ast.PrefixExpression. got=%T", s.Expression)
-        }
-        if exp.Operator != expected.operator {
-            t.Fatalf("exp.Operator is not '%s'. got=%s",
-                expected.operator, exp.Operator)
-        }
-        if !testIntegerLiteral(t, exp.Right, expected.integerValue) {
-            return
-        }
-    }
+		exp, ok := stmt.Expression.(*ast.PrefixExpression)
+		if !ok {
+			t.Fatalf("stmt is not ast.PrefixExpression. got=%T", stmt.Expression)
+		}
+		if exp.Operator != tt.operator {
+			t.Fatalf("exp.Operator is not '%s'. got=%s",
+				tt.operator, exp.Operator)
+		}
+		if !testLiteralExpression(t, exp.Right, tt.value) {
+			return
+		}
+	}
 }
-
 func testIntegerLiteral(t *testing.T, il ast.Expression, value int64) bool {
     integer, ok := il.(*ast.IntegerLiteral)
 
@@ -248,6 +251,28 @@ func testIntegerLiteral(t *testing.T, il ast.Expression, value int64) bool {
     if integer.TokenLiteral() != fmt.Sprintf("%d", value) {
         t.Errorf("integ.TokenLiteral not %d. got=%s", value,
             integer.TokenLiteral())
+        return false
+    }
+
+    return true
+}
+
+func testBooleanLiteral(t *testing.T, il ast.Expression, value bool) bool {
+    boolean, ok := il.(*ast.Boolean)
+
+    if !ok {
+        t.Errorf("expression not an *ast.Boolean. got=%T", il)
+        return false
+    }
+
+    if boolean.Value != value {
+        t.Errorf("boolean.Value not %t. got=%t", value, boolean.Value)
+        return false
+    }
+
+    if boolean.TokenLiteral() != fmt.Sprintf("%t", value) {
+        t.Errorf("boolean.TokenLiteral not %t. got=%s", value,
+            boolean.TokenLiteral())
         return false
     }
 
@@ -281,6 +306,8 @@ func testLiteralExpression(t *testing.T, exp ast.Expression, expected interface{
         return testIntegerLiteral(t, exp, int64(v))
     case int64:
         return testIntegerLiteral(t, exp, v)
+    case bool:
+        return testBooleanLiteral(t, exp, v)
     case string:
         return testIdentifier(t, exp, v)
     }
@@ -322,9 +349,9 @@ func testInfixExpression(
 func TestParsingInfixExpressions(t *testing.T) {
     infixTests := []struct {
         input      string
-        leftValue  int64
+        leftValue  interface{}
         operator   string
-        rightValue int64
+        rightValue interface{}
     }{
         {"5 + 5;", 5, "+", 5},
         {"5 - 5;", 5, "-", 5},
@@ -334,6 +361,9 @@ func TestParsingInfixExpressions(t *testing.T) {
         {"5 < 5;", 5, "<", 5},
         {"5 == 5;", 5, "==", 5},
         {"5 != 5;", 5, "!=", 5},
+        {"true == true", true, "==", true},
+        {"true != false", true, "!=", false},
+        {"false == false", false, "==", false},
     }
 
     for _, expected := range infixTests {
@@ -348,27 +378,25 @@ func TestParsingInfixExpressions(t *testing.T) {
         }
 
         s, ok := program.Statements[0].(*ast.ExpressionStatement)
+
+
+        if !testInfixExpression(
+            t,
+            s.Expression,
+            expected.leftValue,
+            expected.operator,
+            expected.rightValue,
+        ) {
+            return
+        }
+
         if !ok {
             t.Fatalf("the root node aka program.Statements[0] is not an ast.ExpressionStatement. got=%T",
                 program.Statements[0])
         }
 
-        expression, ok := s.Expression.(*ast.InfixExpression)
         if !ok {
             t.Fatalf("expression is not ast.InfixExpression. got=%T", s.Expression)
-        }
-
-        if !testIntegerLiteral(t, expression.Left, expected.leftValue) {
-            return
-        }
-
-        if expression.Operator != expected.operator {
-            t.Fatalf("expression.Operator is not '%s'. got=%s",
-                expected.operator, expression.Operator)
-        }
-
-        if !testIntegerLiteral(t, expression.Right, expected.rightValue) {
-            return
         }
     }
 }
@@ -425,6 +453,22 @@ func TestOperatorPrecedenceParsing(t *testing.T) {
         {
             "3 + 4 * 5 == 3 * 1 + 4 * 5",
             "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))",
+        },
+        {
+            "true",
+            "true",
+        },
+        {
+            "false",
+            "false",
+        },
+        {
+            "3 > 5 == false",
+            "((3 > 5) == false)",
+        },
+        {
+            "3 < 5 == true",
+            "((3 < 5) == true)",
         },
     }
 
