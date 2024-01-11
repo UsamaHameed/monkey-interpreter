@@ -45,6 +45,7 @@ var precedencesMap = map[token.TokenType]int {
     token.MINUS:    SUM,
     token.SLASH:    PRODUCT,
     token.ASTERISK: PRODUCT,
+    token.LPAREN:   CALL,
 }
 
 func (p *Parser) peekPrecedence() int {
@@ -87,6 +88,7 @@ func New(l *lexer.Lexer) *Parser {
     p.registerInfix(token.UNEQ, p.parseInfixExpression)
     p.registerInfix(token.LT, p.parseInfixExpression)
     p.registerInfix(token.GT, p.parseInfixExpression)
+    p.registerInfix(token.LPAREN, p.parseCallExpression)
 
     p.nextToken()
     p.nextToken()
@@ -180,6 +182,8 @@ func (p *Parser) parseReturnStatement() *ast.ReturnStatement {
 
     p.nextToken()
 
+    s.ReturnValue = p.parseExpression(LOWEST)
+
     if !p.curTokenIs(token.SEMICOLON) {
         p.nextToken()
     }
@@ -199,6 +203,9 @@ func (p *Parser) parseLetStatement() *ast.LetStatement {
     if !p.expectPeek(token.ASSIGN) {
         return nil
     }
+    p.nextToken()
+
+    s.Value = p.parseExpression(LOWEST)
 
     for !p.curTokenIs(token.SEMICOLON) {
         p.nextToken()
@@ -315,6 +322,37 @@ func (p *Parser) parseFunctionParameters() []*ast.Identifier {
     }
 
     return identifiers
+}
+
+func (p *Parser) parseCallExpression(function ast.Expression) ast.Expression {
+    call := &ast.CallExpression{Token: p.curToken, Function: function}
+    call.Arguments = p.parseCallArguments()
+
+    return call
+}
+
+func (p *Parser) parseCallArguments() []ast.Expression {
+    args := []ast.Expression{}
+
+    if p.peekTokenIs(token.RPAREN) {
+        p.nextToken()
+        return args
+    }
+
+    p.nextToken()
+    args = append(args, p.parseExpression(LOWEST))
+
+    for p.peekTokenIs(token.COMMA) {
+        p.nextToken()
+        p.nextToken()
+        args = append(args, p.parseExpression(LOWEST))
+    }
+
+    if !p.expectPeek(token.RPAREN) {
+        return nil
+    }
+
+    return args
 }
 
 func (p *Parser) parseBlockStatement() *ast.BlockStatement {
